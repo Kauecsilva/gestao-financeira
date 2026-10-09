@@ -1,36 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gestão Financeira
 
-## Getting Started
+App pessoal (celular e PC) para ver a situação financeira: dinheiro em conta, benefícios como VR,
+compromissos fixos e parcelamentos, e quanto sobra livre no mês.
 
-First, run the development server:
+## Rodar localmente
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev     # http://localhost:3000
+npm test        # regras de cálculo
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Sem configurar nada, o app abre em **modo local**: os dados ficam só no navegador.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Ligar ao Supabase (sincroniza celular e PC)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Crie um projeto em [supabase.com](https://supabase.com).
+2. No SQL Editor, rode `supabase/migrations/0001_init.sql`.
+3. Copie `.env.example` para `.env.local` e preencha com a URL e a anon key do projeto
+   (Project Settings → API).
+4. Reinicie o `npm run dev`. O app passa a pedir login; crie sua conta pela própria tela.
 
-## Learn More
+## Publicar na Vercel
 
-To learn more about Next.js, take a look at the following resources:
+Importe o repositório na [Vercel](https://vercel.com), adicione as duas variáveis de ambiente acima
+e faça o deploy. No celular, abra o site e use "Adicionar à tela inicial" para instalar.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Como o painel calcula
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+As regras ficam em `src/lib/finance.ts`, com testes em `src/lib/finance.test.ts`.
 
-## Deploy on Vercel
+- **Em conta**: corrente + poupança + dinheiro.
+- **Benefícios**: saldo de VR/VA, mostrado à parte.
+- **Comprometido no mês**: fixos e parcelas de hoje até o fim do mês + faturas de cartão em aberto.
+- **Livre no mês**: em conta + receitas previstas no mês − comprometido.
+- **Próximos 6 meses**: o livre acumulado mês a mês, somando receitas e subtraindo fixos e parcelas.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Compromissos com data anterior a hoje são considerados já pagos (refletidos no saldo).
+Valores são guardados em centavos.
