@@ -21,9 +21,21 @@ Sem configurar nada, o app abre em **modo local**: os dados ficam só no navegad
    (Project Settings → API).
 4. Reinicie o `npm run dev`. O app passa a pedir login; crie sua conta pela própria tela.
 
+## Assistente com IA
+
+A tela **Assistente** responde perguntas como "quero gastar R$ 400 num tênis, cabe?" ou "como planejar
+meus próximos investimentos?" olhando os números do painel. Usa a API do Claude no servidor
+(`src/app/api/assistente/route.ts`); o app manda um resumo em texto da situação
+(`src/lib/snapshot.ts`) e as instruções ficam em `src/lib/assistant-prompt.ts`.
+
+1. Gere uma chave em [platform.claude.com](https://platform.claude.com) e coloque em `ANTHROPIC_API_KEY`
+   (no `.env.local` e nas variáveis da Vercel).
+2. Com Supabase configurado, só quem está logado usa o assistente. Sem Supabase, ele funciona no
+   `npm run dev` mas fica bloqueado em produção, para ninguém gastar sua chave.
+
 ## Publicar na Vercel
 
-Importe o repositório na [Vercel](https://vercel.com), adicione as duas variáveis de ambiente acima
+Importe o repositório na [Vercel](https://vercel.com), adicione as variáveis de ambiente acima (Supabase e `ANTHROPIC_API_KEY`)
 e faça o deploy. No celular, abra o site e use "Adicionar à tela inicial" para instalar.
 
 ## Como o painel calcula

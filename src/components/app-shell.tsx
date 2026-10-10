@@ -9,6 +9,7 @@ const NAV = [
   { href: "/contas", label: "Contas", icon: "M3 7h18v12H3zM3 7l2-3h14l2 3M16 13h2" },
   { href: "/lancamentos", label: "Lançamentos", icon: "M4 6h16M4 12h16M4 18h10" },
   { href: "/compromissos", label: "Compromissos", icon: "M7 3v3m10-3v3M4 8h16M5 5h14v15H5z" },
+  { href: "/assistente", label: "Assistente", icon: "M4 5h16v11H9l-5 4V5zm4 5h.01M12 10h.01M16 10h.01" },
 ];
 
 function Icon({ d }: { d: string }) {
@@ -61,12 +62,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-4 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-5 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
         {NAV.map((n) => (
           <Link
             key={n.href}
             href={n.href}
-            className={`flex flex-col items-center gap-0.5 py-2 text-[11px] ${active(n.href) ? "text-accent" : "text-muted"}`}
+            className={`flex flex-col items-center gap-0.5 py-2 text-[10px] ${active(n.href) ? "text-accent" : "text-muted"}`}
           >
             <Icon d={n.icon} />
             {n.label}
