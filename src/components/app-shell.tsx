@@ -5,11 +5,12 @@ import { usePathname } from "next/navigation";
 import { useFinance } from "./finance-provider";
 
 const NAV = [
-  { href: "/", label: "Painel", icon: "M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" },
-  { href: "/contas", label: "Contas", icon: "M3 7h18v12H3zM3 7l2-3h14l2 3M16 13h2" },
-  { href: "/lancamentos", label: "Lançamentos", icon: "M4 6h16M4 12h16M4 18h10" },
-  { href: "/compromissos", label: "Compromissos", icon: "M7 3v3m10-3v3M4 8h16M5 5h14v15H5z" },
-  { href: "/assistente", label: "Assistente", icon: "M4 5h16v11H9l-5 4V5zm4 5h.01M12 10h.01M16 10h.01" },
+  { href: "/", label: "Painel", short: "Painel", icon: "M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" },
+  { href: "/contas", label: "Contas", short: "Contas", icon: "M3 7h18v12H3zM3 7l2-3h14l2 3M16 13h2" },
+  { href: "/lancamentos", label: "Lançamentos", short: "Gastos", icon: "M4 6h16M4 12h16M4 18h10" },
+  { href: "/compromissos", label: "Compromissos", short: "Fixos", icon: "M7 3v3m10-3v3M4 8h16M5 5h14v15H5z" },
+  { href: "/investimentos", label: "Investimentos", short: "Investir", icon: "M4 19h16M6 16l4-5 3 3 5-7" },
+  { href: "/assistente", label: "Assistente", short: "Assistente", icon: "M4 5h16v11H9l-5 4V5zm4 5h.01M12 10h.01M16 10h.01" },
 ];
 
 function Icon({ d }: { d: string }) {
@@ -62,7 +63,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-5 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-6 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
         {NAV.map((n) => (
           <Link
             key={n.href}
@@ -70,7 +71,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className={`flex flex-col items-center gap-0.5 py-2 text-[10px] ${active(n.href) ? "text-accent" : "text-muted"}`}
           >
             <Icon d={n.icon} />
-            {n.label}
+            {n.short}
           </Link>
         ))}
       </nav>

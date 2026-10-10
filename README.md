@@ -16,10 +16,16 @@ Sem configurar nada, o app abre em **modo local**: os dados ficam só no navegad
 ## Ligar ao Supabase (sincroniza celular e PC)
 
 1. Crie um projeto em [supabase.com](https://supabase.com).
-2. No SQL Editor, rode `supabase/migrations/0001_init.sql`.
+2. No SQL Editor, rode os arquivos de `supabase/migrations/` em ordem (`0001_init.sql`, depois `0002_investments.sql`).
 3. Copie `.env.example` para `.env.local` e preencha com a URL e a anon key do projeto
    (Project Settings → API).
 4. Reinicie o `npm run dev`. O app passa a pedir login; crie sua conta pela própria tela.
+
+## Investimentos
+
+A tela **Investimentos** guarda a carteira: tipo, instituição, quanto foi aplicado, quanto vale hoje
+(você atualiza), para que é o dinheiro (reserva, meta, longo prazo) e o prazo de resgate. Mostra o
+rendimento e a divisão por tipo. Cálculos em `src/lib/portfolio.ts`.
 
 ## Assistente
 
@@ -35,7 +41,9 @@ e responde com regras fixas sobre os números do painel, sem sair do navegador.
   sobrar algo; **melhor não agora** se ficar negativo, dizendo em que mês dá para pagar à vista.
 - Parcelado: olha o mês mais apertado da projeção pagando a parcela.
 - Comida e mercado: sugere pagar com VR/VA quando o saldo cobre.
-- Investimentos: primeiro a reserva de emergência (6 meses de custo), depois orientações gerais.
+- Investimentos: primeiro a reserva de emergência (6 meses de custo, contando a poupança e os
+  investimentos marcados como reserva); com ela completa, olha a divisão da carteira cadastrada
+  (excesso de renda variável, cripto acima de 10%, falta de longo prazo) e dá orientações gerais.
 
 ### Opcional: usar o Claude (pago)
 

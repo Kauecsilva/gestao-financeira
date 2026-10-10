@@ -54,11 +54,31 @@ export interface Installment {
   created_at?: string;
 }
 
+export type InvestmentKind = "fixed_income" | "treasury" | "stocks" | "reits" | "crypto" | "pension" | "other";
+export type InvestmentPurpose = "emergency" | "short_term" | "long_term";
+export type Liquidity = "daily" | "at_maturity" | "other";
+
+export interface Investment {
+  id: string;
+  name: string;
+  kind: InvestmentKind;
+  institution: string;
+  /** Quanto foi aplicado no total. */
+  invested_amount: number;
+  /** Quanto vale hoje (atualizado pelo usuário). */
+  current_amount: number;
+  purpose: InvestmentPurpose;
+  liquidity: Liquidity;
+  maturity_date: string | null;
+  created_at?: string;
+}
+
 export interface FinanceData {
   accounts: Account[];
   transactions: Transaction[];
   recurring: Recurring[];
   installments: Installment[];
+  investments: Investment[];
 }
 
 export type TableName = keyof FinanceData;
@@ -70,6 +90,31 @@ export const ACCOUNT_TYPE_LABEL: Record<AccountType, string> = {
   cash: "Dinheiro",
   credit_card: "Cartão de crédito",
   benefit: "Benefício (VR/VA)",
+};
+
+export const INVESTMENT_KIND_LABEL: Record<InvestmentKind, string> = {
+  fixed_income: "Renda fixa (CDB, LCI, LCA)",
+  treasury: "Tesouro Direto",
+  stocks: "Ações e ETFs",
+  reits: "Fundos imobiliários",
+  crypto: "Criptomoedas",
+  pension: "Previdência",
+  other: "Outros",
+};
+
+/** Tipos com oscilação de preço (renda variável). */
+export const VARIABLE_INCOME: InvestmentKind[] = ["stocks", "reits", "crypto"];
+
+export const PURPOSE_LABEL: Record<InvestmentPurpose, string> = {
+  emergency: "Reserva de emergência",
+  short_term: "Meta de curto/médio prazo",
+  long_term: "Longo prazo",
+};
+
+export const LIQUIDITY_LABEL: Record<Liquidity, string> = {
+  daily: "Resgate a qualquer momento",
+  at_maturity: "Só no vencimento",
+  other: "Outro prazo",
 };
 
 export const CATEGORIES = [

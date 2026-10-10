@@ -28,7 +28,7 @@ export function useFinance(): FinanceContext {
   return ctx;
 }
 
-const empty: FinanceData = { accounts: [], transactions: [], recurring: [], installments: [] };
+const empty: FinanceData = { accounts: [], transactions: [], recurring: [], installments: [], investments: [] };
 
 function upsertIn<T extends { id: string }>(rows: T[], row: T): T[] {
   const i = rows.findIndex((r) => r.id === row.id);
@@ -107,6 +107,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
             transactions: next.transactions.filter((r) => r.account_id !== id),
             recurring: next.recurring.filter((r) => r.account_id !== id),
             installments: next.installments.filter((r) => r.account_id !== id),
+            investments: next.investments,
           };
         },
         () => store.remove(table, id),
