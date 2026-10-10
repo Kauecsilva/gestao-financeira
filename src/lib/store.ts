@@ -11,9 +11,9 @@ export interface Store {
   remove(table: TableName, id: string): Promise<void>;
 }
 
-export const TABLES: TableName[] = ["accounts", "transactions", "recurring", "installments"];
+export const TABLES: TableName[] = ["accounts", "transactions", "recurring", "installments", "investments"];
 
-const emptyData = (): FinanceData => ({ accounts: [], transactions: [], recurring: [], installments: [] });
+const emptyData = (): FinanceData => ({ accounts: [], transactions: [], recurring: [], installments: [], investments: [] });
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

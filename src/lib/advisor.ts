@@ -1,8 +1,9 @@
 import { monthKey, monthLabel } from "./dates";
 import { activeInstallments, projection, summary } from "./finance";
 import { formatBRL, parseBRL } from "./money";
+import { portfolioSummary } from "./portfolio";
 import { averageVariableSpending } from "./snapshot";
-import type { FinanceData } from "./types";
+import { INVESTMENT_KIND_LABEL, type FinanceData } from "./types";
 
 // Assistente gratuito: entende perguntas simples e responde com regras fixas sobre
 // os números do app. Roda inteiro no navegador, sem API.
@@ -17,6 +18,8 @@ export interface ParsedQuestion {
   compare: boolean;
   /** Gasto que dá para pagar com VR/VA (comida, mercado). */
   food: boolean;
+  /** "Quero investir R$ X": valor a aplicar agora (e não o que já tem). */
+  toInvest: boolean;
 }
 
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -57,7 +60,9 @@ export function parseQuestion(text: string): ParsedQuestion {
   else if (saving) intent = "savings";
   else if (buying) intent = "purchase";
 
-  return { intent, amount, installments, compare, food };
+  const toInvest = /(quero|vou|posso|devo|onde)\s+(investir|aplicar|colocar)/.test(t) && !/tenho/.test(t);
+
+  return { intent, amount, installments, compare, food, toInvest };
 }
 
 interface Context {
@@ -241,12 +246,17 @@ function savings(data: FinanceData, today: string): string {
   return lines.join("\n");
 }
 
+const pct = (x: number) => `${Math.round(x * 100)}%`;
+
 function investment(data: FinanceData, today: string, q: ParsedQuestion): string {
   const ctx = context(data, today);
+  const p = portfolioSummary(data);
   const cap = monthlyCapacity(ctx);
   const monthlyCost = ctx.monthlyFixed + ctx.avgVariable;
   const target = monthlyCost * 6;
-  const reserve = q.amount ?? ctx.savingsBalance;
+  const citedHolding = q.amount != null && !q.toInvest;
+  const reserve = citedHolding ? q.amount! : p.emergencyReserve;
+  const toAllocate = q.toInvest ? q.amount : null;
   const lines: string[] = [];
 
   if (monthlyCost === 0) {
@@ -256,27 +266,62 @@ function investment(data: FinanceData, today: string, q: ParsedQuestion): string
   if (reserve < target) {
     const missing = target - reserve;
     const months = cap > 0 ? Math.ceil(missing / cap) : null;
-    lines.push("**Prioridade: completar a reserva de emergência.**", "");
+    lines.push(
+      toAllocate
+        ? `**Coloque os ${brl(toAllocate)} na reserva de emergência.**`
+        : "**Prioridade: completar a reserva de emergência.**",
+      "",
+    );
     lines.push(
       `- Reserva ideal: 6 meses do seu custo (${brl(monthlyCost)}/mês) = ${brl(target)}.`,
-      q.amount
+      citedHolding
         ? `- Com os ${brl(reserve)} que você citou, faltam ${brl(missing)}.`
-        : `- Você tem ${brl(reserve)} guardados; faltam ${brl(missing)}.`,
+        : `- Você tem ${brl(reserve)} na reserva (poupança e investimentos marcados como reserva); faltam ${brl(missing)}.`,
       months
         ? `- Guardando ${brl(cap)} por mês, completa em cerca de ${months} ${months === 1 ? "mês" : "meses"}.`
         : "- Hoje não sobra dinheiro por mês para completar; veja onde cortar primeiro.",
       "- Para a reserva, use algo com liquidez diária e baixo risco: Tesouro Selic ou CDB com liquidez diária que pague pelo menos 100% do CDI.",
     );
+    const variable = Math.round(p.current * p.variableShare);
+    if (variable > 0) {
+      lines.push(`- Você já tem ${brl(variable)} em renda variável. Não precisa vender, mas os próximos aportes rendem mais segurança na reserva.`);
+    }
   } else {
-    lines.push("**Sua reserva de emergência está completa.** Dá para pensar em metas maiores.", "");
     lines.push(
-      `- Reserva: ${brl(reserve)} para uma meta de ${brl(target)} (6 meses de custo).`,
-      cap > 0 ? `- Por mês dá para investir cerca de ${brl(cap)}.` : "- Hoje não sobra dinheiro por mês para novos aportes.",
-      "- Metas de 1 a 5 anos: renda fixa com prazo parecido (CDB, Tesouro prefixado ou IPCA+).",
-      "- Longo prazo (aposentadoria): Tesouro IPCA+ longo e, se aceitar oscilação, fundos de índice de ações.",
-      "- Uma divisão comum é começar com a maior parte em renda fixa e aumentar a renda variável aos poucos.",
+      toAllocate
+        ? `**Sua reserva está completa: os ${brl(toAllocate)} podem ir para metas maiores.**`
+        : "**Sua reserva de emergência está completa.** Dá para pensar em metas maiores.",
+      "",
     );
+    lines.push(`- Reserva: ${brl(reserve)} para uma meta de ${brl(target)} (6 meses de custo).`);
+    if (p.current > 0) {
+      const top = p.byKind.slice(0, 3).map((k) => `${INVESTMENT_KIND_LABEL[k.kind].split(" (")[0]} ${pct(k.share)}`);
+      lines.push(
+        `- Carteira: ${brl(p.current)}${p.gainRatio != null ? ` (${p.gain >= 0 ? "+" : ""}${pct(p.gainRatio)} sobre o aplicado)` : ""}; ${top.join(", ")}.`,
+      );
+    }
+    if (cap > 0 && !toAllocate) lines.push(`- Por mês dá para investir cerca de ${brl(cap)}.`);
+
+    const crypto = p.byKind.find((k) => k.kind === "crypto");
+    if (p.current > 0 && p.variableShare > 0.5) {
+      lines.push(`- ${pct(p.variableShare)} da carteira está em renda variável. Para equilibrar, mande os próximos aportes para renda fixa.`);
+    } else if (crypto && crypto.share > 0.1) {
+      lines.push(`- Cripto já é ${pct(crypto.share)} da carteira; acima de 10% o risco de grandes quedas pesa. Prefira outros tipos nos próximos aportes.`);
+    } else if (p.byPurpose.long_term === 0) {
+      lines.push("- Ainda não há nada para o longo prazo. Tesouro IPCA+ longo protege da inflação e é um bom começo.");
+    } else if (p.current > 0 && p.variableShare === 0) {
+      lines.push("- A carteira está toda em renda fixa. Se o prazo for longo e você aceitar oscilação, uma parte pequena (10% a 20%) em fundos de índice de ações pode render mais.");
+    } else {
+      lines.push(
+        "- Metas de 1 a 5 anos: renda fixa com prazo parecido (CDB, Tesouro prefixado ou IPCA+).",
+        "- Longo prazo: Tesouro IPCA+ longo e, se aceitar oscilação, fundos de índice de ações.",
+      );
+    }
+    if (reserve > target * 1.5) {
+      lines.push(`- A reserva passou bastante da meta; uns ${brl(reserve - target)} poderiam ir para metas de prazo maior.`);
+    }
   }
+  if (data.investments.length === 0) lines.push("- Cadastre seus investimentos na aba Investimentos para eu considerar a carteira.");
   lines.push("", "São orientações gerais, não recomendação de investimento.");
   return lines.join("\n");
 }

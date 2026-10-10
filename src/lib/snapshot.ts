@@ -1,7 +1,8 @@
 import { addMonths, formatDate, monthKey, monthLabel, parts } from "./dates";
 import { activeInstallments, projection, spentByCategory, summary } from "./finance";
 import { formatBRL } from "./money";
-import { ACCOUNT_TYPE_LABEL, type FinanceData } from "./types";
+import { portfolioSummary } from "./portfolio";
+import { ACCOUNT_TYPE_LABEL, INVESTMENT_KIND_LABEL, PURPOSE_LABEL, type FinanceData } from "./types";
 
 // Resumo em texto da situação financeira, enviado ao assistente junto com a pergunta.
 // Os números vêm todos daqui: a IA explica e recomenda, mas não refaz as contas.
@@ -97,6 +98,16 @@ export function buildSnapshot(data: FinanceData, today: string): string {
   const byCat = (key: string) => spentByCategory(data, key).map((c) => `- ${c.category}: ${brl(c.amount)}`);
   section(`Gastos lançados em ${monthLabel(monthKey(today))} (mês atual, até hoje)`, byCat(monthKey(today)));
   section(`Gastos lançados em ${monthLabel(prevKey)}`, byCat(prevKey));
+
+  const p = portfolioSummary(data);
+  section(
+    `Investimentos (atual ${brl(p.current)}, aplicado ${brl(p.invested)}, reserva de emergência ${brl(p.emergencyReserve)} incluindo poupança)`,
+    data.investments.map(
+      (i) =>
+        `- ${i.name} [${INVESTMENT_KIND_LABEL[i.kind]}, ${PURPOSE_LABEL[i.purpose]}]: vale ${brl(i.current_amount)}, aplicado ${brl(i.invested_amount)}` +
+        `${i.maturity_date ? `, vence ${formatDate(i.maturity_date)}` : ""}`,
+    ),
+  );
 
   const avg = averageVariableSpending(data, today);
   section("Gasto do dia a dia", [

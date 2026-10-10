@@ -57,6 +57,7 @@ const base: FinanceData = {
     rec({ id: "salario", kind: "income", amount: 500000, day_of_month: 30, category: "Salário" }),
   ],
   installments: [inst({})],
+  investments: [],
 };
 
 describe("recurringOccurrences", () => {

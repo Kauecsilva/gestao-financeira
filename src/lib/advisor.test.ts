@@ -55,6 +55,7 @@ const data: FinanceData = {
     { id: "a", account_id: "c", kind: "expense", amount: 200000, category: "Moradia", description: "Aluguel", day_of_month: 15, start_date: "2026-01-01", end_date: null },
   ],
   installments: [],
+  investments: [],
 };
 
 describe("answer", () => {
@@ -94,5 +95,27 @@ describe("answer", () => {
 
   it("explica o que sabe responder", () => {
     expect(answer(data, "2026-10-10", "oi")).toContain("Eu sei responder");
+  });
+});
+
+describe("answer com carteira", () => {
+  const withPortfolio: FinanceData = {
+    ...data,
+    investments: [
+      { id: "r", name: "Tesouro Selic", kind: "treasury", institution: "", invested_amount: 2000000, current_amount: 2200000, purpose: "emergency", liquidity: "daily", maturity_date: null },
+      { id: "c", name: "Bitcoin", kind: "crypto", institution: "", invested_amount: 300000, current_amount: 500000, purpose: "long_term", liquidity: "daily", maturity_date: null },
+    ],
+  };
+
+  it("usa a reserva cadastrada e aponta concentração em cripto", () => {
+    const a = answer(withPortfolio, "2026-10-10", "me ajude a planejar meus próximos investimentos");
+    expect(a).toContain("reserva de emergência está completa");
+    expect(a).toMatch(/Carteira: R\$\s27\.000,00 \(\+17% sobre o aplicado\)/);
+    expect(a).toContain("Cripto já é 19% da carteira");
+  });
+
+  it("valor a investir vai para a reserva quando ela está incompleta", () => {
+    const a = answer(data, "2026-10-10", "quero investir R$ 1.000, onde coloco?");
+    expect(a).toMatch(/^\*\*Coloque os R\$\s1\.000,00 na reserva de emergência/);
   });
 });

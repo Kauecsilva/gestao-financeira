@@ -14,6 +14,7 @@ const data: FinanceData = {
   ],
   recurring: [],
   installments: [],
+  investments: [],
 };
 
 describe("averageVariableSpending", () => {

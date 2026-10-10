@@ -7,6 +7,7 @@ import { useFinance } from "@/components/finance-provider";
 import { ProjectionChart } from "@/components/projection-chart";
 import { endOfMonth, formatDate, monthLabel, today } from "@/lib/dates";
 import { activeInstallments, projection, summary } from "@/lib/finance";
+import { portfolioSummary } from "@/lib/portfolio";
 
 export default function Painel() {
   const { data } = useFinance();
@@ -14,6 +15,7 @@ export default function Painel() {
   const s = useMemo(() => summary(data, now), [data, now]);
   const proj = useMemo(() => projection(data, now, 6), [data, now]);
   const parcels = useMemo(() => activeInstallments(data, now), [data, now]);
+  const invested = useMemo(() => portfolioSummary(data).current, [data]);
   const accountName = (id: string) => data.accounts.find((a) => a.id === id)?.name ?? "";
 
   if (data.accounts.length === 0) {
@@ -38,6 +40,11 @@ export default function Painel() {
         <p className="mt-1 text-xs text-muted">
           Dinheiro em conta + receitas previstas − compromissos que ainda vão sair este mês.
         </p>
+        {invested > 0 && (
+          <Link href="/investimentos" className="mt-1 inline-block text-xs text-accent">
+            Mais {fmtShort(invested)} investidos
+          </Link>
+        )}
       </section>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
