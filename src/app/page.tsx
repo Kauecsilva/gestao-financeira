@@ -50,7 +50,7 @@ export default function Painel() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Em conta" cents={s.available} />
         <Stat label="Benefícios" cents={s.benefits} note={s.benefitsCommitted ? `${fmtShort(s.benefitsCommitted)} previstos` : undefined} />
-        <Stat label="Comprometido no mês" cents={s.committed} note={s.cardBills ? `inclui ${fmtShort(s.cardBills)} de fatura` : undefined} />
+        <Stat label="Comprometido no mês" cents={s.committed} note={s.cardBillsDue ? `inclui ${fmtShort(s.cardBillsDue)} de fatura` : undefined} />
         <Stat label="Receitas previstas" cents={s.expectedIncome} />
       </div>
 
@@ -87,6 +87,7 @@ export default function Painel() {
                   <th className="font-normal">Entradas</th>
                   <th className="font-normal">Fixos</th>
                   <th className="font-normal">Parcelas</th>
+                  <th className="font-normal">Faturas</th>
                   <th className="font-normal">Livre acum.</th>
                 </tr>
               </thead>
@@ -97,6 +98,7 @@ export default function Painel() {
                     <td>{fmtShort(m.income)}</td>
                     <td>{fmtShort(m.recurringExpenses)}</td>
                     <td>{fmtShort(m.installmentExpenses)}</td>
+                    <td>{fmtShort(m.cardBillExpenses)}</td>
                     <td className={m.projectedFree < 0 ? "text-bad" : ""}>{fmtShort(m.projectedFree)}</td>
                   </tr>
                 ))}

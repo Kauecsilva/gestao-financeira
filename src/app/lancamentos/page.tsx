@@ -1,12 +1,24 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useFinance } from "@/components/finance-provider";
 import { Button, Card, Empty, Field, Money, MoneyInput, PageHeader, Sheet, inputClass, uid } from "@/components/ui";
 import { addMonths, dateInMonth, formatDate, monthKey, monthLabel, parts, today } from "@/lib/dates";
-import { spentByCategory } from "@/lib/finance";
+import { hasBillingDays, invoiceDueDate, spentByCategory } from "@/lib/finance";
 import { formatBRL } from "@/lib/money";
-import { CATEGORIES, type Kind, type Transaction } from "@/lib/types";
+import { CATEGORIES, type Account, type Kind, type Transaction } from "@/lib/types";
+
+type Payment = "debit" | "credit";
+
+/** "Nubank · crédito, fatura de 05/11" para gastos no cartão; só o nome da conta nos demais. */
+function accountLabel(account: Account | undefined, t: Pick<Transaction, "kind" | "date">): string {
+  if (!account) return "";
+  if (account.type !== "credit_card") return account.name;
+  if (t.kind === "income") return `${account.name} · estorno`;
+  const due = hasBillingDays(account) ? `, fatura de ${formatDate(invoiceDueDate(account, t.date)).slice(0, 5)}` : "";
+  return `${account.name} · crédito${due}`;
+}
 
 export default function Lancamentos() {
   const { data, deleteTransaction } = useFinance();
@@ -24,7 +36,7 @@ export default function Lancamentos() {
   const byCategory = useMemo(() => spentByCategory(data, month), [data, month]);
   const spent = byCategory.reduce((s, c) => s + c.amount, 0);
   const income = rows.filter((t) => t.kind === "income").reduce((s, t) => s + t.amount, 0);
-  const accountName = (id: string) => data.accounts.find((a) => a.id === id)?.name ?? "";
+  const accountOf = (t: Transaction) => accountLabel(data.accounts.find((a) => a.id === t.account_id), t);
 
   const shift = (n: number) => {
     const { y, m } = parts(`${month}-01`);
@@ -55,7 +67,7 @@ export default function Lancamentos() {
                   <button onClick={() => setViewing(t)} className="flex w-full items-center justify-between gap-3 py-2 text-left text-sm">
                     <div className="min-w-0">
                       <p className="truncate">{t.description || t.category}</p>
-                      <p className="text-xs text-muted">{formatDate(t.date)} · {t.category} · {accountName(t.account_id)}</p>
+                      <p className="text-xs text-muted">{formatDate(t.date)} · {t.category} · {accountOf(t)}</p>
                     </div>
                     <Money cents={t.kind === "expense" ? -t.amount : t.amount} className={t.kind === "income" ? "text-good" : ""} />
                   </button>
@@ -98,7 +110,7 @@ export default function Lancamentos() {
           <div className="space-y-3 text-sm">
             <p className="text-2xl font-semibold"><Money cents={viewing.kind === "expense" ? -viewing.amount : viewing.amount} /></p>
             <p>{viewing.description || viewing.category}</p>
-            <p className="text-muted">{formatDate(viewing.date)} · {viewing.category} · {accountName(viewing.account_id)}</p>
+            <p className="text-muted">{formatDate(viewing.date)} · {viewing.category} · {accountOf(viewing)}</p>
             <Button
               variant="danger"
               className="w-full"
@@ -122,8 +134,15 @@ function TransactionForm({ onDone }: { onDone: () => void }) {
   const [amount, setAmount] = useState<number | null>(null);
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<string>("Alimentação");
-  const [accountId, setAccountId] = useState(data.accounts[0]?.id ?? "");
+  const cards = data.accounts.filter((a) => a.type === "credit_card");
+  const debitAccounts = data.accounts.filter((a) => a.type !== "credit_card");
+  const [payment, setPayment] = useState<Payment>(debitAccounts.length ? "debit" : "credit");
+  const [debitId, setDebitId] = useState(debitAccounts[0]?.id ?? "");
+  const [cardId, setCardId] = useState(cards[0]?.id ?? "");
+  const [incomeId, setIncomeId] = useState(debitAccounts[0]?.id ?? data.accounts[0]?.id ?? "");
   const [date, setDate] = useState(today());
+  const accountId = kind === "income" ? incomeId : payment === "credit" ? cardId : debitId;
+  const card = cards.find((c) => c.id === cardId);
   const [repeats, setRepeats] = useState(false);
   const [endDate, setEndDate] = useState("");
 
@@ -183,11 +202,62 @@ function TransactionForm({ onDone }: { onDone: () => void }) {
           <input type="date" required className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
         </Field>
       </div>
-      <Field label="Conta">
-        <select className={inputClass} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-          {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
-      </Field>
+      {kind === "income" ? (
+        <Field label="Conta">
+          <select className={inputClass} value={incomeId} onChange={(e) => setIncomeId(e.target.value)}>
+            {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </Field>
+      ) : (
+        <>
+          <div className="space-y-1">
+            <span className="text-sm">Pagamento</span>
+            <div className="grid grid-cols-2 gap-1 rounded-lg border border-border p-1 text-sm">
+              {(["debit", "credit"] as Payment[]).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPayment(p)}
+                  className={`rounded-md py-1.5 ${payment === p ? "bg-accent text-white" : ""}`}
+                >
+                  {p === "debit" ? "Débito / Pix" : "Crédito"}
+                </button>
+              ))}
+            </div>
+          </div>
+          {payment === "debit" ? (
+            debitAccounts.length ? (
+              <Field label="Conta">
+                <select className={inputClass} value={debitId} onChange={(e) => setDebitId(e.target.value)}>
+                  {debitAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </Field>
+            ) : (
+              <p className="text-sm text-muted">
+                Nenhuma conta para débito. <Link href="/contas" className="text-accent">Cadastre em Contas</Link>.
+              </p>
+            )
+          ) : cards.length ? (
+            <Field
+              label="Cartão"
+              hint={
+                hasBillingDays(card)
+                  ? `Entra na fatura que vence em ${formatDate(invoiceDueDate(card, date))}.`
+                  : "Cadastre o fechamento e o vencimento do cartão em Contas para saber em qual fatura cai."
+              }
+            >
+              <select className={inputClass} value={cardId} onChange={(e) => setCardId(e.target.value)}>
+                {cards.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </Field>
+          ) : (
+            <p className="text-sm text-muted">
+              Nenhum cartão de crédito ainda. <Link href="/contas" className="text-accent">Cadastre em Contas</Link> com
+              o dia de fechamento e de vencimento.
+            </p>
+          )}
+        </>
+      )}
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={repeats} onChange={(e) => setRepeats(e.target.checked)} className="size-4 accent-accent" />
         Repete todo mês no dia {parts(date).d}
@@ -197,7 +267,7 @@ function TransactionForm({ onDone }: { onDone: () => void }) {
           <input type="date" min={date} className={inputClass} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
         </Field>
       )}
-      <Button className="w-full" disabled={!amount}>Salvar</Button>
+      <Button className="w-full" disabled={!amount || !accountId}>Salvar</Button>
     </form>
   );
 }

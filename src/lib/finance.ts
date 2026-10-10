@@ -6,7 +6,7 @@ import type { Account, FinanceData, Installment, Kind, Recurring } from "./types
 // Convenção: compromissos com data anterior a hoje já foram pagos e estão refletidos
 // nos saldos; os de hoje em diante ainda vão sair.
 
-export type ScheduledSource = "recurring" | "installment" | "recharge";
+export type ScheduledSource = "recurring" | "installment" | "recharge" | "card_bill";
 
 export interface ScheduledItem {
   date: string;
@@ -61,12 +61,79 @@ export function installmentSchedule(inst: Installment): InstallmentParcel[] {
   });
 }
 
-/** Tudo o que está previsto entre `from` e `to` (inclusive), em ordem de data. */
-export function scheduled(data: FinanceData, from: string, to: string): ScheduledItem[] {
+type CardWithDays = Account & { closing_day: number; due_day: number };
+
+/** Cartão com dia de fechamento e de vencimento cadastrados. */
+export function hasBillingDays(a: Account | undefined): a is CardWithDays {
+  return a?.type === "credit_card" && !!a.closing_day && !!a.due_day;
+}
+
+/** Vencimento da fatura em que cai uma compra feita em `date`. Compra no dia do fechamento já vai para a próxima. */
+export function invoiceDueDate(card: CardWithDays, date: string): string {
+  const { y, m } = parts(date);
+  const closesThisMonth = date < dateInMonth(y, m, card.closing_day);
+  const closing = closesThisMonth ? { y, m } : addMonths(y, m, 1);
+  // Vencimento depois do fechamento no mesmo mês; senão, no mês seguinte ao fechamento.
+  const due = card.due_day > card.closing_day ? closing : addMonths(closing.y, closing.m, 1);
+  return dateInMonth(due.y, due.m, card.due_day);
+}
+
+/** Próximo vencimento do cartão a partir de `today` (inclusive). */
+export function nextDueDate(card: CardWithDays, today: string): string {
+  const { y, m } = parts(today);
+  const thisMonth = dateInMonth(y, m, card.due_day);
+  if (thisMonth >= today) return thisMonth;
+  const next = addMonths(y, m, 1);
+  return dateInMonth(next.y, next.m, card.due_day);
+}
+
+export interface CardInvoice {
+  due: string;
+  amount: number;
+}
+
+/**
+ * Divide a fatura em aberto do cartão pelos vencimentos. Compras lançadas que caem em faturas
+ * depois da próxima vão para elas; o resto do saldo (inclusive o que foi digitado na conta) é
+ * a próxima fatura.
+ */
+export function cardInvoices(data: FinanceData, card: CardWithDays, today: string): CardInvoice[] {
+  const next = nextDueDate(card, today);
+  const later = new Map<string, number>();
+  for (const t of data.transactions) {
+    if (t.account_id !== card.id) continue;
+    const due = invoiceDueDate(card, t.date);
+    if (due <= next) continue;
+    later.set(due, (later.get(due) ?? 0) + balanceDelta(card, t.kind, t.amount));
+  }
+  const laterTotal = sum([...later.values()]);
+  return [
+    { due: next, amount: card.balance - laterTotal },
+    ...[...later].sort(([a], [b]) => (a < b ? -1 : 1)).map(([due, amount]) => ({ due, amount })),
+  ].filter((i) => i.amount !== 0);
+}
+
+/**
+ * Tudo o que está previsto entre `from` e `to` (inclusive), em ordem de data.
+ *
+ * Fixos e parcelas no cartão de crédito saem do dinheiro no vencimento da fatura, não na data
+ * da compra. `since` é desde quando contar compras ainda não feitas (as anteriores já estão na
+ * fatura em aberto); por padrão, `from`.
+ */
+export function scheduled(data: FinanceData, from: string, to: string, since = from): ScheduledItem[] {
   const items: ScheduledItem[] = [];
+  const accounts = accountIndex(data);
+  /** Data em que o item sai do dinheiro, ou null se cai fora do período. */
+  const payDate = (accountId: string, date: string): string | null => {
+    const card = accounts.get(accountId);
+    const pay = hasBillingDays(card) ? invoiceDueDate(card, date) : date;
+    return date >= since && pay >= from && pay <= to ? pay : null;
+  };
 
   for (const r of data.recurring) {
-    for (const date of recurringOccurrences(r, from, to)) {
+    for (const occurrence of recurringOccurrences(r, since, to)) {
+      const date = payDate(r.account_id, occurrence);
+      if (!date) continue;
       items.push({
         date,
         kind: r.kind,
@@ -82,9 +149,10 @@ export function scheduled(data: FinanceData, from: string, to: string): Schedule
 
   for (const inst of data.installments) {
     for (const p of installmentSchedule(inst)) {
-      if (p.date < from || p.date > to) continue;
+      const date = payDate(inst.account_id, p.date);
+      if (!date) continue;
       items.push({
-        date: p.date,
+        date,
         kind: "expense",
         amount: p.amount,
         description: inst.description,
@@ -115,6 +183,23 @@ export function scheduled(data: FinanceData, from: string, to: string): Schedule
     }
   }
 
+  for (const card of data.accounts) {
+    if (!hasBillingDays(card)) continue;
+    for (const inv of cardInvoices(data, card, since)) {
+      if (inv.amount <= 0 || inv.due < from || inv.due > to) continue;
+      items.push({
+        date: inv.due,
+        kind: "expense",
+        amount: inv.amount,
+        description: `Fatura ${card.name}`,
+        category: "Cartão",
+        account_id: card.id,
+        source: "card_bill",
+        source_id: card.id,
+      });
+    }
+  }
+
   return items.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
 }
 
@@ -132,11 +217,13 @@ export interface Summary {
   available: number;
   /** Saldo somado de VR, VA etc. */
   benefits: number;
-  /** Faturas de cartão em aberto. */
+  /** Faturas de cartão em aberto (todas, não só as que vencem no mês). */
   cardBills: number;
+  /** Faturas que vencem até o fim do mês (cartão sem vencimento cadastrado conta inteiro). */
+  cardBillsDue: number;
   /** Receitas previstas de hoje até o fim do mês (fora benefícios). */
   expectedIncome: number;
-  /** Recorrências e parcelas de hoje até o fim do mês + faturas em aberto. */
+  /** Recorrências, parcelas e faturas de hoje até o fim do mês. */
   committed: number;
   /** O que dá para gastar no mês sem mexer em nada comprometido. */
   free: number;
@@ -153,12 +240,15 @@ export function summary(data: FinanceData, today: string): Summary {
   const available = balanceOf((a) => CASH_TYPES.has(a.type));
   const benefits = balanceOf((a) => a.type === "benefit");
   const cardBills = balanceOf((a) => a.type === "credit_card");
+  // Cartão sem vencimento cadastrado: a fatura inteira conta como do mês, como antes.
+  const undatedBills = balanceOf((a) => a.type === "credit_card" && !hasBillingDays(a));
 
   const upcoming = scheduled(data, today, endOfMonth(today));
   const cash = upcoming.filter((i) => isCashItem(i, accounts));
   const expectedIncome = sum(cash.filter((i) => i.kind === "income").map((i) => i.amount));
   const committed =
-    sum(cash.filter((i) => i.kind === "expense").map((i) => i.amount)) + cardBills;
+    sum(cash.filter((i) => i.kind === "expense").map((i) => i.amount)) + undatedBills;
+  const cardBillsDue = sum(cash.filter((i) => i.source === "card_bill").map((i) => i.amount)) + undatedBills;
   const benefitsCommitted = sum(
     upcoming.filter((i) => !isCashItem(i, accounts) && i.kind === "expense").map((i) => i.amount),
   );
@@ -167,6 +257,7 @@ export function summary(data: FinanceData, today: string): Summary {
     available,
     benefits,
     cardBills,
+    cardBillsDue,
     expectedIncome,
     committed,
     free: available + expectedIncome - committed,
@@ -180,6 +271,8 @@ export interface MonthProjection {
   income: number;
   recurringExpenses: number;
   installmentExpenses: number;
+  /** Compras no cartão já lançadas que caem em faturas deste mês. */
+  cardBillExpenses: number;
   net: number;
   /** Livre acumulado ao fim do mês, partindo do livre do mês atual. */
   projectedFree: number;
@@ -195,15 +288,24 @@ export function projection(data: FinanceData, today: string, months = 6): MonthP
   for (let i = 1; i <= months; i++) {
     const next = addMonths(y, m, i);
     const from = dateInMonth(next.y, next.m, 1);
-    const items = scheduled(data, from, endOfMonth(from)).filter((it) => isCashItem(it, accounts));
+    const items = scheduled(data, from, endOfMonth(from), today).filter((it) => isCashItem(it, accounts));
     const income = sum(items.filter((it) => it.kind === "income").map((it) => it.amount));
     const expensesBy = (source: ScheduledSource) =>
       sum(items.filter((it) => it.kind === "expense" && it.source === source).map((it) => it.amount));
     const recurringExpenses = expensesBy("recurring");
     const installmentExpenses = expensesBy("installment");
-    const net = income - recurringExpenses - installmentExpenses;
+    const cardBillExpenses = expensesBy("card_bill");
+    const net = income - recurringExpenses - installmentExpenses - cardBillExpenses;
     running += net;
-    out.push({ month: monthKey(from), income, recurringExpenses, installmentExpenses, net, projectedFree: running });
+    out.push({
+      month: monthKey(from),
+      income,
+      recurringExpenses,
+      installmentExpenses,
+      cardBillExpenses,
+      net,
+      projectedFree: running,
+    });
   }
   return out;
 }

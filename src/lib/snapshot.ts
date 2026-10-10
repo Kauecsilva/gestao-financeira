@@ -40,7 +40,7 @@ export function buildSnapshot(data: FinanceData, today: string): string {
         a.type === "benefit" && a.monthly_recharge
           ? ` (recarga de ${brl(a.monthly_recharge)} todo dia ${a.recharge_day}; só serve para alimentação/mercado)`
           : a.type === "credit_card"
-            ? " (fatura em aberto)"
+            ? ` (fatura em aberto${a.closing_day && a.due_day ? `; fecha dia ${a.closing_day}, vence dia ${a.due_day}` : ""})`
             : "";
       return `- ${a.name} [${ACCOUNT_TYPE_LABEL[a.type]}]: ${brl(a.balance)}${extra}`;
     }),
@@ -49,7 +49,7 @@ export function buildSnapshot(data: FinanceData, today: string): string {
   section("Resumo do mês atual (calculado pelo app)", [
     `- Em conta (corrente + poupança + dinheiro): ${brl(s.available)}`,
     `- Benefícios (VR/VA): ${brl(s.benefits)}`,
-    `- Faturas de cartão em aberto: ${brl(s.cardBills)}`,
+    `- Faturas de cartão em aberto: ${brl(s.cardBills)} (vencem este mês: ${brl(s.cardBillsDue)})`,
     `- Receitas previstas até o fim do mês: ${brl(s.expectedIncome)}`,
     `- Comprometido até o fim do mês (fixos + parcelas + faturas): ${brl(s.committed)}`,
     `- LIVRE até o fim do mês: ${brl(s.free)}`,
@@ -84,11 +84,11 @@ export function buildSnapshot(data: FinanceData, today: string): string {
   );
 
   section(
-    "Projeção dos próximos 6 meses (só fixos e parcelas; NÃO inclui gastos do dia a dia)",
+    "Projeção dos próximos 6 meses (fixos, parcelas e faturas já lançadas; NÃO inclui gastos do dia a dia)",
     projection(data, today, 6).map(
       (m) =>
         `- ${monthLabel(m.month)}: entradas ${brl(m.income)}, fixos ${brl(m.recurringExpenses)},` +
-        ` parcelas ${brl(m.installmentExpenses)}, saldo do mês ${brl(m.net)}, livre acumulado ${brl(m.projectedFree)}`,
+        ` parcelas ${brl(m.installmentExpenses)}, faturas ${brl(m.cardBillExpenses)}, saldo do mês ${brl(m.net)}, livre acumulado ${brl(m.projectedFree)}`,
     ),
   );
 
