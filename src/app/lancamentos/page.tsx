@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useFinance } from "@/components/finance-provider";
 import { Button, Card, Empty, Field, Money, MoneyInput, PageHeader, Sheet, inputClass, uid } from "@/components/ui";
-import { addMonths, formatDate, monthKey, monthLabel, parts, today } from "@/lib/dates";
+import { addMonths, dateInMonth, formatDate, monthKey, monthLabel, parts, today } from "@/lib/dates";
 import { spentByCategory } from "@/lib/finance";
 import { formatBRL } from "@/lib/money";
 import { CATEGORIES, type Kind, type Transaction } from "@/lib/types";
@@ -117,18 +117,36 @@ export default function Lancamentos() {
 }
 
 function TransactionForm({ onDone }: { onDone: () => void }) {
-  const { data, addTransaction } = useFinance();
+  const { data, addTransaction, save } = useFinance();
   const [kind, setKind] = useState<Kind>("expense");
   const [amount, setAmount] = useState<number | null>(null);
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<string>("Alimentação");
   const [accountId, setAccountId] = useState(data.accounts[0]?.id ?? "");
   const [date, setDate] = useState(today());
+  const [repeats, setRepeats] = useState(false);
+  const [endDate, setEndDate] = useState("");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!amount || !accountId) return;
     await addTransaction({ id: uid(), kind, amount, description, category, account_id: accountId, date });
+    if (repeats) {
+      // Este mês já entrou no saldo pelo lançamento; o fixo começa no mês seguinte.
+      const { y, m, d } = parts(date);
+      const next = addMonths(y, m, 1);
+      await save("recurring", {
+        id: uid(),
+        kind,
+        amount,
+        description,
+        category,
+        account_id: accountId,
+        day_of_month: d,
+        start_date: dateInMonth(next.y, next.m, d),
+        end_date: endDate || null,
+      });
+    }
     onDone();
   }
 
@@ -170,6 +188,15 @@ function TransactionForm({ onDone }: { onDone: () => void }) {
           {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
       </Field>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={repeats} onChange={(e) => setRepeats(e.target.checked)} className="size-4 accent-accent" />
+        Repete todo mês no dia {parts(date).d}
+      </label>
+      {repeats && (
+        <Field label="Até quando (opcional)">
+          <input type="date" min={date} className={inputClass} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        </Field>
+      )}
       <Button className="w-full" disabled={!amount}>Salvar</Button>
     </form>
   );
