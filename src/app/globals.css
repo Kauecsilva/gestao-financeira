@@ -1,26 +1,54 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --background: #f6f6f4;
+  --surface: #ffffff;
+  --foreground: #0b0b0b;
+  --muted: #52514e;
+  --border: #e4e3df;
+  --accent: #2a78d6;
+  --accent-soft: #cde2fb;
+  --good: #008300;
+  --bad: #c62f2e;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #111110;
+    --surface: #1a1a19;
+    --foreground: #ffffff;
+    --muted: #c3c2b7;
+    --border: #2e2e2b;
+    --accent: #3987e5;
+    --accent-soft: #184f95;
+    --good: #3fae4f;
+    --bad: #e66767;
   }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-good: var(--good);
+  --color-bad: var(--bad);
+  --font-sans: var(--font-geist-sans);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+input,
+select {
+  font-size: 16px; /* evita zoom automático no iPhone */
 }
