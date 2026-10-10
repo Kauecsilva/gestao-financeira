@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useFinance } from "@/components/finance-provider";
 import { SimpleMarkdown } from "@/components/simple-markdown";
 import { Button, PageHeader } from "@/components/ui";
+import { answer } from "@/lib/advisor";
 import { today } from "@/lib/dates";
 import { buildSnapshot } from "@/lib/snapshot";
 import { supabase } from "@/lib/store";
@@ -12,6 +13,10 @@ interface Message {
   role: "user" | "assistant";
   content: string;
 }
+
+// Por padrão o assistente é a calculadora gratuita do app. Com NEXT_PUBLIC_ASSISTANT_MODE=ai
+// (e ANTHROPIC_API_KEY no servidor), as perguntas vão para o Claude.
+const USE_AI = process.env.NEXT_PUBLIC_ASSISTANT_MODE === "ai";
 
 const SUGGESTIONS = [
   "Quero comprar um tênis de R$ 400. Cabe no meu bolso agora?",
@@ -35,8 +40,12 @@ export default function Assistente() {
     const q = question.trim();
     if (!q || busy) return;
     const history: Message[] = [...messages, { role: "user", content: q }];
-    setMessages([...history, { role: "assistant", content: "" }]);
     setInput("");
+    if (!USE_AI) {
+      setMessages([...history, { role: "assistant", content: answer(data, today(), q) }]);
+      return;
+    }
+    setMessages([...history, { role: "assistant", content: "" }]);
     setBusy(true);
 
     const appendToAnswer = (chunk: string) =>
@@ -83,7 +92,7 @@ export default function Assistente() {
           <div className="space-y-3">
             <p className="text-sm text-muted">
               Pergunte se um gasto cabe no seu momento ou peça ajuda para planejar. O assistente olha seus saldos,
-              compromissos e parcelamentos antes de responder.
+              compromissos, parcelamentos e a média de gastos do dia a dia antes de responder.
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               {SUGGESTIONS.map((s) => (
