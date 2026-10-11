@@ -2,6 +2,7 @@
 
 import type { Session } from "@supabase/supabase-js";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { bankApi, type SyncSummary } from "@/lib/bank-api";
 import { balanceDelta } from "@/lib/finance";
 import { createStore, supabase, type Store } from "@/lib/store";
 import type { Account, FinanceData, RowOf, TableName, Transaction } from "@/lib/types";
@@ -17,6 +18,8 @@ interface FinanceContext {
   addTransaction(t: Transaction): Promise<void>;
   /** Apaga o lançamento e desfaz o ajuste no saldo. */
   deleteTransaction(t: Transaction): Promise<void>;
+  /** Lê tudo de novo do banco (depois de sincronizar com os bancos, por exemplo). */
+  reload(): Promise<void>;
   signOut(): Promise<void>;
 }
 
@@ -74,6 +77,16 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial dos dados
     void reload();
   }, [session, needsLogin, reload]);
+
+  // Ao abrir o app, puxa saldos e lançamentos dos bancos conectados (o servidor limita a uma vez
+  // por hora). Sem bancos conectados ou sem a Pluggy configurada, não faz nada.
+  const userId = session?.user.id;
+  useEffect(() => {
+    if (!userId) return;
+    bankApi<SyncSummary>("/sincronizar", "POST", { auto: true })
+      .then((r) => (r.synced > 0 ? reload() : undefined))
+      .catch(() => {});
+  }, [userId, reload]);
 
   // Atualiza a tela na hora e grava em seguida; se a gravação falhar, recarrega do banco.
   const persist = useCallback(
@@ -156,12 +169,13 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       remove,
       addTransaction,
       deleteTransaction,
+      reload,
       signOut: async () => {
         await supabase()?.auth.signOut();
         replaceData(null);
       },
     };
-  }, [data, error, persist, store, replaceData]);
+  }, [data, error, persist, store, replaceData, reload]);
 
   if (session === undefined) return <FullScreenMessage text="Carregando…" />;
   if (needsLogin) return <LoginForm />;

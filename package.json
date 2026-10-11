@@ -13,6 +13,8 @@
     "@anthropic-ai/sdk": "^0.133.0",
     "@supabase/supabase-js": "^2.117.3",
     "next": "16.4.0",
+    "pluggy-connect-sdk": "^2.14.2",
+    "pluggy-sdk": "^0.92.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
