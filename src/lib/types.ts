@@ -16,6 +16,10 @@ export interface Account {
   closing_day?: number | null;
   /** Só para cartão de crédito: dia em que a fatura vence. */
   due_day?: number | null;
+  /** Id da conta no banco (Pluggy), quando ela é sincronizada. */
+  external_id?: string | null;
+  /** Data a partir da qual os lançamentos do banco são importados. */
+  synced_since?: string | null;
   created_at?: string;
 }
 
@@ -29,6 +33,8 @@ export interface Transaction {
   category: string;
   description: string;
   date: string;
+  /** Id do lançamento no banco (Pluggy), quando veio da sincronização. */
+  external_id?: string | null;
   created_at?: string;
 }
 

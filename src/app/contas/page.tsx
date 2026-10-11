@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BankConnections } from "@/components/bank-connections";
 import { useFinance } from "@/components/finance-provider";
 import { Button, Card, Empty, Field, Money, MoneyInput, PageHeader, Sheet, inputClass, uid } from "@/components/ui";
 import { formatDate, today } from "@/lib/dates";
@@ -58,6 +59,9 @@ export default function Contas() {
           ))}
         </div>
       )}
+      <div className="mt-4">
+        <BankConnections />
+      </div>
       <Sheet open={!!editing} title={editing && data.accounts.some((a) => a.id === editing.id) ? "Editar conta" : "Nova conta"} onClose={() => setEditing(null)}>
         {editing && <AccountForm key={editing.id} initial={editing} onDone={() => setEditing(null)} />}
       </Sheet>
@@ -98,7 +102,13 @@ function AccountForm({ initial, onDone }: { initial: Account; onDone: () => void
       </Field>
       <Field
         label={a.type === "credit_card" ? "Fatura em aberto" : "Saldo atual"}
-        hint={a.type === "credit_card" ? "Quanto você deve hoje nesse cartão." : undefined}
+        hint={
+          a.external_id
+            ? "Sincronizada com o banco: o valor é atualizado sozinho."
+            : a.type === "credit_card"
+              ? "Quanto você deve hoje nesse cartão."
+              : undefined
+        }
       >
         <MoneyInput value={a.balance} onChange={(v) => setA({ ...a, balance: v ?? 0 })} />
       </Field>
