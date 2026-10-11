@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useFinance } from "@/components/finance-provider";
 import { Button, Card, Empty, Field, Money, MoneyInput, PageHeader, Sheet, inputClass, uid } from "@/components/ui";
+import { formatDate, today } from "@/lib/dates";
+import { cardInvoices, hasBillingDays } from "@/lib/finance";
+import { formatBRL } from "@/lib/money";
 import { ACCOUNT_TYPE_LABEL, type Account, type AccountType } from "@/lib/types";
 
 const ORDER: AccountType[] = ["checking", "savings", "cash", "benefit", "credit_card"];
@@ -10,6 +13,13 @@ const ORDER: AccountType[] = ["checking", "savings", "cash", "benefit", "credit_
 export default function Contas() {
   const { data } = useFinance();
   const [editing, setEditing] = useState<Account | null>(null);
+
+  const cardLine = (a: Account) => {
+    if (!hasBillingDays(a)) return "Fatura em aberto · cadastre o vencimento";
+    const next = cardInvoices(data, a, today())[0];
+    const days = `Fecha dia ${a.closing_day}, vence dia ${a.due_day}`;
+    return next && next.amount > 0 ? `${days} · próxima fatura ${formatBRL(next.amount)} em ${formatDate(next.due).slice(0, 5)}` : days;
+  };
 
   const blank = (): Account => ({ id: uid(), name: "", type: "checking", balance: 0, monthly_recharge: null, recharge_day: null });
 
@@ -37,7 +47,7 @@ export default function Contas() {
                               Recarga de <Money cents={a.monthly_recharge} /> todo dia {a.recharge_day}
                             </p>
                           ) : null}
-                          {a.type === "credit_card" && <p className="text-xs text-muted">Fatura em aberto</p>}
+                          {a.type === "credit_card" && <p className="text-xs text-muted">{cardLine(a)}</p>}
                         </div>
                         <Money cents={a.balance} className="font-medium" />
                       </button>
@@ -60,6 +70,7 @@ function AccountForm({ initial, onDone }: { initial: Account; onDone: () => void
   const [a, setA] = useState(initial);
   const exists = data.accounts.some((x) => x.id === a.id);
   const isBenefit = a.type === "benefit";
+  const isCard = a.type === "credit_card";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -67,6 +78,8 @@ function AccountForm({ initial, onDone }: { initial: Account; onDone: () => void
       ...a,
       monthly_recharge: isBenefit ? a.monthly_recharge : null,
       recharge_day: isBenefit && a.monthly_recharge ? a.recharge_day ?? 1 : null,
+      closing_day: isCard ? a.closing_day ?? null : null,
+      due_day: isCard ? a.due_day ?? null : null,
     });
     onDone();
   }
@@ -95,9 +108,25 @@ function AccountForm({ initial, onDone }: { initial: Account; onDone: () => void
             <MoneyInput value={a.monthly_recharge} onChange={(v) => setA({ ...a, monthly_recharge: v })} />
           </Field>
           <Field label="Dia da recarga">
-            <input type="number" min={1} max={31} className={inputClass} value={a.recharge_day ?? ""} onChange={(e) => setA({ ...a, recharge_day: e.target.value ? Number(e.target.value) : null })} />
+            <DayInput value={a.recharge_day} onChange={(v) => setA({ ...a, recharge_day: v })} />
           </Field>
         </div>
+      )}
+      {isCard && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Dia do fechamento">
+              <DayInput required value={a.closing_day} onChange={(v) => setA({ ...a, closing_day: v })} />
+            </Field>
+            <Field label="Dia do vencimento">
+              <DayInput required value={a.due_day} onChange={(v) => setA({ ...a, due_day: v })} />
+            </Field>
+          </div>
+          <p className="text-xs text-muted">
+            Compras a partir do dia do fechamento entram na fatura seguinte. Os gastos no crédito saem do
+            seu dinheiro no vencimento.
+          </p>
+        </>
       )}
       <div className="flex gap-2 pt-2">
         <Button className="flex-1">Salvar</Button>
@@ -116,5 +145,20 @@ function AccountForm({ initial, onDone }: { initial: Account; onDone: () => void
         )}
       </div>
     </form>
+  );
+}
+
+function DayInput({ value, onChange, required }: { value: number | null | undefined; onChange: (day: number | null) => void; required?: boolean }) {
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={1}
+      max={31}
+      required={required}
+      className={inputClass}
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+    />
   );
 }

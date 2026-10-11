@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   activeInstallments,
   balanceDelta,
+  cardInvoices,
   installmentSchedule,
+  invoiceDueDate,
   projection,
   recurringOccurrences,
   summary,
@@ -143,5 +145,78 @@ describe("balanceDelta", () => {
     expect(balanceDelta(acc({ type: "credit_card" }), "expense", 1000)).toBe(1000);
     expect(balanceDelta(acc({}), "expense", 1000)).toBe(-1000);
     expect(balanceDelta(acc({}), "income", 1000)).toBe(1000);
+  });
+});
+
+describe("cartão com fechamento e vencimento", () => {
+  // Fecha dia 28, vence dia 5 do mês seguinte.
+  const card = acc({ id: "card", type: "credit_card", balance: 0, closing_day: 28, due_day: 5 }) as Account & {
+    closing_day: number;
+    due_day: number;
+  };
+
+  it("compra antes do fechamento vence no mês seguinte; no dia do fechamento, pula um mês", () => {
+    expect(invoiceDueDate(card, "2026-10-27")).toBe("2026-11-05");
+    expect(invoiceDueDate(card, "2026-10-28")).toBe("2026-12-05");
+  });
+
+  it("vencimento depois do fechamento cai no mesmo mês", () => {
+    const c = { ...card, closing_day: 3, due_day: 10 };
+    expect(invoiceDueDate(c, "2026-10-02")).toBe("2026-10-10");
+    expect(invoiceDueDate(c, "2026-10-03")).toBe("2026-11-10");
+  });
+
+  it("fechamento dia 31 em mês curto fecha no último dia", () => {
+    const c = { ...card, closing_day: 31, due_day: 8 };
+    expect(invoiceDueDate(c, "2026-02-27")).toBe("2026-03-08");
+    expect(invoiceDueDate(c, "2026-02-28")).toBe("2026-04-08");
+  });
+
+  // Hoje 10/10. Fatura de 05/11 tem 300,00 (digitado na conta); compra de 29/10 vai para 05/12.
+  const data: FinanceData = {
+    ...base,
+    accounts: [acc({ id: "nubank", balance: 300000 }), { ...card, balance: 30000 + 20000 }],
+    transactions: [
+      { id: "t", account_id: "card", kind: "expense", amount: 20000, category: "Compras", description: "", date: "2026-10-29" },
+    ],
+    recurring: [rec({ id: "spotify", account_id: "card", amount: 2000, day_of_month: 15 })],
+    installments: [],
+  };
+
+  it("separa a fatura em aberto pelos vencimentos", () => {
+    expect(cardInvoices(data, { ...card, balance: 50000 }, "2026-10-10")).toEqual([
+      { due: "2026-11-05", amount: 30000 },
+      { due: "2026-12-05", amount: 20000 },
+    ]);
+  });
+
+  it("não tira do livre deste mês o que só vence no mês que vem", () => {
+    const s = summary(data, "2026-10-10");
+    expect(s.cardBills).toBe(50000);
+    expect(s.cardBillsDue).toBe(0);
+    expect(s.committed).toBe(0);
+    expect(s.free).toBe(300000);
+  });
+
+  it("projeta faturas e fixos do cartão no mês do vencimento", () => {
+    const [nov, dez] = projection(data, "2026-10-10", 2);
+    // Spotify de 15/10 vence em 05/11; o de 15/11, em 05/12.
+    expect(nov.cardBillExpenses).toBe(30000);
+    expect(nov.recurringExpenses).toBe(2000);
+    expect(dez.cardBillExpenses).toBe(20000);
+    expect(dez.recurringExpenses).toBe(2000);
+  });
+
+  it("fixo no cartão que já passou da data não conta de novo", () => {
+    // Em 20/10 o Spotify de 15/10 já está na fatura em aberto.
+    const [nov] = projection(data, "2026-10-20", 1);
+    expect(nov.recurringExpenses).toBe(0);
+  });
+
+  it("lista a fatura que vence no mês entre os compromissos", () => {
+    const s = summary(data, "2026-11-01");
+    const bill = s.upcoming.find((i) => i.source === "card_bill");
+    expect(bill).toMatchObject({ date: "2026-11-05", amount: 30000, description: "Fatura Conta" });
+    expect(s.cardBillsDue).toBe(30000);
   });
 });

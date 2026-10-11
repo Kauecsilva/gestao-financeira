@@ -12,6 +12,10 @@ export interface Account {
   monthly_recharge: number | null;
   /** Só para benefícios: dia do mês em que a recarga cai. */
   recharge_day: number | null;
+  /** Só para cartão de crédito: dia em que a fatura fecha. Compras desse dia em diante vão para a próxima. */
+  closing_day?: number | null;
+  /** Só para cartão de crédito: dia em que a fatura vence. */
+  due_day?: number | null;
   created_at?: string;
 }
 
