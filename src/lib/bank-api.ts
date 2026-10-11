@@ -30,10 +30,19 @@ export interface SyncSummary {
   errors: string[];
 }
 
-export async function bankApi<T>(path: string, method: "GET" | "POST" | "DELETE" = "GET", body?: unknown): Promise<T> {
+export function bankApi<T>(path: string, method: "GET" | "POST" | "DELETE" = "GET", body?: unknown): Promise<T> {
+  return api<T>(`/api/bancos${path}`, method, body);
+}
+
+/** Token para abrir o Pluggy Connect (a janela da Pluggy onde você entra no banco). */
+export async function connectToken(): Promise<string> {
+  return (await api<{ accessToken: string }>("/api/connect-token", "POST", {})).accessToken;
+}
+
+async function api<T>(url: string, method: "GET" | "POST" | "DELETE", body?: unknown): Promise<T> {
   const { data } = (await supabase()?.auth.getSession()) ?? { data: { session: null } };
   const token = data.session?.access_token;
-  const res = await fetch(`/api/bancos${path}`, {
+  const res = await fetch(url, {
     method,
     headers: {
       "content-type": "application/json",

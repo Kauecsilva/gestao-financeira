@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { bankApi, type BankConnectionView, type Preview, type SyncSummary } from "@/lib/bank-api";
+import { bankApi, connectToken, type BankConnectionView, type Preview, type SyncSummary } from "@/lib/bank-api";
 import { ACCOUNT_TYPE_LABEL, type Account, type AccountType } from "@/lib/types";
 import { useFinance } from "./finance-provider";
 import { Button, Card, Field, Money, Sheet, inputClass } from "./ui";
@@ -20,7 +20,8 @@ export function BankConnections() {
   const [connections, setConnections] = useState<BankConnectionView[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [connecting, setConnecting] = useState(false);
+  // Sheet de conectar aberto; com item, veio do Pluggy Connect e já busca as contas dele.
+  const [connecting, setConnecting] = useState<{ itemId: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -58,6 +59,25 @@ export function BankConnections() {
     }
   }
 
+  // Abre o Pluggy Connect, onde você escolhe o banco e autoriza pelo Open Finance. Quando termina,
+  // a conexão nova (item) vem para cá e seguimos para escolher o que fazer com cada conta.
+  async function openPluggy() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const [token, { PluggyConnect }] = await Promise.all([connectToken(), import("pluggy-connect-sdk")]);
+      await new PluggyConnect({
+        connectToken: token,
+        onSuccess: ({ item }) => setConnecting({ itemId: item.id }),
+        onError: ({ message }) => setMessage(`A Pluggy não conseguiu conectar: ${message}`),
+      }).init();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function disconnect(c: BankConnectionView) {
     if (!confirm(`Desconectar ${c.name || "este banco"}? As contas e lançamentos já trazidos continuam no app.`)) return;
     try {
@@ -78,7 +98,7 @@ export function BankConnections() {
               {busy ? "Sincronizando…" : "Sincronizar"}
             </Button>
           )}
-          <Button onClick={() => setConnecting(true)}>Conectar banco</Button>
+          <Button disabled={busy} onClick={openPluggy}>Conectar banco</Button>
         </div>
       }
     >
@@ -104,11 +124,15 @@ export function BankConnections() {
         </ul>
       )}
       {message && <p className="mt-3 text-sm text-muted">{message}</p>}
-      <Sheet open={connecting} title="Conectar banco" onClose={() => setConnecting(false)}>
+      <button onClick={() => setConnecting({ itemId: "" })} className="mt-3 text-xs text-muted underline">
+        Já conectei pelo Meu Pluggy e tenho o Item ID
+      </button>
+      <Sheet open={!!connecting} title="Conectar banco" onClose={() => setConnecting(null)}>
         {connecting && (
           <ConnectForm
+            initialItemId={connecting.itemId}
             onDone={async (text) => {
-              setConnecting(false);
+              setConnecting(null);
               setMessage(text);
               await Promise.all([reload(), load()]);
             }}
@@ -126,20 +150,19 @@ function linkable(accounts: Account[], type: AccountType): Account[] {
   return accounts.filter((a) => !a.external_id && a.type !== "benefit" && isCardType(a.type) === isCardType(type));
 }
 
-function ConnectForm({ onDone }: { onDone: (message: string) => void }) {
+function ConnectForm({ initialItemId, onDone }: { initialItemId: string; onDone: (message: string) => void }) {
   const { data } = useFinance();
-  const [itemId, setItemId] = useState("");
+  const [itemId, setItemId] = useState(initialItemId);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [links, setLinks] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function lookUp(e: React.FormEvent) {
-    e.preventDefault();
+  const lookUp = useCallback(async (id: string) => {
     setBusy(true);
     setError(null);
     try {
-      const p = await bankApi<Preview>("/previa", "POST", { itemId: itemId.trim() });
+      const p = await bankApi<Preview>("/previa", "POST", { itemId: id.trim() });
       setPreview(p);
       setLinks(Object.fromEntries(p.accounts.map((a) => [a.id, "new"])));
     } catch (err) {
@@ -147,7 +170,13 @@ function ConnectForm({ onDone }: { onDone: (message: string) => void }) {
     } finally {
       setBusy(false);
     }
-  }
+  }, []);
+
+  // Veio do Pluggy Connect: já busca as contas, sem pedir o Item ID.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- busca inicial das contas
+    if (initialItemId) void lookUp(initialItemId);
+  }, [initialItemId, lookUp]);
 
   async function connect() {
     const chosen = Object.values(links).filter((v) => v !== "new" && v !== "skip");
@@ -166,9 +195,19 @@ function ConnectForm({ onDone }: { onDone: (message: string) => void }) {
     }
   }
 
+  if (!preview && initialItemId) {
+    return error ? <p className="text-sm text-bad">{error}</p> : <p className="text-sm text-muted">Buscando as contas do banco…</p>;
+  }
+
   if (!preview) {
     return (
-      <form onSubmit={lookUp} className="space-y-3">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void lookUp(itemId);
+        }}
+        className="space-y-3"
+      >
         <ol className="list-decimal space-y-1 pl-5 text-sm text-muted">
           <li>Em meu.pluggy.ai, conecte o banco pelo Open Finance.</li>
           <li>No painel da Pluggy (dashboard.pluggy.ai), abra a conexão e copie o Item ID.</li>
@@ -222,7 +261,9 @@ function ConnectForm({ onDone }: { onDone: (message: string) => void }) {
       {error && <p className="text-sm text-bad">{error}</p>}
       <div className="flex gap-2 pt-2">
         <Button className="flex-1" disabled={busy} onClick={connect}>{busy ? "Conectando…" : "Conectar"}</Button>
-        <Button variant="ghost" disabled={busy} onClick={() => setPreview(null)}>Voltar</Button>
+        {!initialItemId && (
+          <Button variant="ghost" disabled={busy} onClick={() => setPreview(null)}>Voltar</Button>
+        )}
       </div>
     </div>
   );

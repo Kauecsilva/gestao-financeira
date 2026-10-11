@@ -35,10 +35,13 @@ para fazer de graça com o **Meu Pluggy**:
 3. Na Vercel (e no `.env.local`), defina `PLUGGY_CLIENT_ID` e `PLUGGY_CLIENT_SECRET`. Elas ficam só
    no servidor.
 4. Rode `supabase/migrations/0004_bank_sync.sql` no SQL Editor do Supabase.
-5. No app, em Contas → **Conectar banco**, cole o **Item ID** de cada banco (no painel da Pluggy,
-   abra a conexão e copie o id). Para cada conta encontrada você escolhe criar uma conta nova
-   (traz os últimos 90 dias), usar uma conta que já existe no app (o saldo passa a vir do banco e
-   os lançamentos entram a partir daquele dia, para não repetir o que você já digitou) ou não trazer.
+5. No app, em Contas → **Conectar banco**: abre a janela da Pluggy (Pluggy Connect), você escolhe o
+   banco e autoriza no app dele. Quem já conectou pelo Meu Pluggy usa o link "Já conectei pelo Meu
+   Pluggy" e cola o **Item ID** (no painel da Pluggy, abra a conexão e copie o id). Para cada conta
+   encontrada você escolhe criar uma conta nova (traz os últimos 90 dias), usar uma conta que já
+   existe no app (o saldo passa a vir do banco e os lançamentos entram a partir daquele dia, para
+   não repetir o que você já digitou) ou não trazer. O token da janela da Pluggy é gerado em
+   `src/app/api/connect-token/route.ts`, só para quem está logado.
 
 Depois disso, toda vez que o app abre ele sincroniza sozinho (no máximo uma vez por hora), e há o
 botão **Sincronizar** para forçar. O saldo de cada conta passa a ser o do banco. Lançamentos
