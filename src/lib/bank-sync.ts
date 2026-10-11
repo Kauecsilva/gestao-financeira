@@ -92,8 +92,12 @@ export function categoryOf(pluggyCategory: string | null): string {
  * Movimentos entre as próprias contas (pagar a fatura, transferir para si mesmo) não são gasto nem
  * receita: o saldo das duas pontas já vem certo do banco. Importar contaria o gasto em dobro.
  */
-export function isInternalMovement(pluggyCategory: string | null): boolean {
-  return !!pluggyCategory && /credit card payment|same person transfer|same ownership/i.test(pluggyCategory);
+export function isInternalMovement(pluggyCategory: string | null, description = ""): boolean {
+  // Nem todo banco manda a categoria; a descrição do pagamento da fatura também denuncia.
+  return (
+    (!!pluggyCategory && /credit card payment|same person transfer|same ownership/i.test(pluggyCategory)) ||
+    /^\s*(pagamento (de|da) fatura|pgto\.? (de )?fatura|pagamento recebido)/i.test(description)
+  );
 }
 
 export interface ImportedTransaction {
@@ -107,15 +111,18 @@ export interface ImportedTransaction {
 
 /** O lançamento como fica no app, ou null quando não deve ser importado. */
 export function toTransaction(t: PluggyTransaction): ImportedTransaction | null {
-  if (t.status === "PENDING" || isInternalMovement(t.category)) return null;
+  const description = (t.description || t.descriptionRaw || "").trim().slice(0, 200);
+  if (t.status === "PENDING" || isInternalMovement(t.category, description)) return null;
   const amount = Math.abs(toCents(t.amountInAccountCurrency ?? t.amount));
   if (amount === 0) return null;
+  const kind: Kind = t.type === "CREDIT" ? "income" : "expense";
   return {
     external_id: t.id,
-    kind: t.type === "CREDIT" ? "income" : "expense",
+    kind,
     amount,
-    category: categoryOf(t.category),
-    description: (t.description || t.descriptionRaw || "").trim().slice(0, 200),
+    // Entrada só é Salário ou Outros: rendimento e estorno não são "Contas" nem "Compras".
+    category: kind === "income" ? (categoryOf(t.category) === "Salário" ? "Salário" : "Outros") : categoryOf(t.category),
+    description,
     date: isoToLocalDate(t.date),
   };
 }

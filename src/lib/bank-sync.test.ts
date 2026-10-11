@@ -103,6 +103,12 @@ describe("lançamentos", () => {
     expect(toTransaction(tx({ category: "Credit card payment" }))).toBeNull();
     expect(toTransaction(tx({ category: "Same person transfer" }))).toBeNull();
     expect(toTransaction(tx({ amount: 0 }))).toBeNull();
+    expect(toTransaction(tx({ category: null, description: "Pagamento de fatura" }))).toBeNull();
+  });
+
+  it("entradas ficam como Salário ou Outros", () => {
+    expect(toTransaction(tx({ type: "CREDIT", category: "Interest" }))?.category).toBe("Outros");
+    expect(toTransaction(tx({ type: "CREDIT", category: "Salary" }))?.category).toBe("Salário");
   });
 
   it("traduz as categorias da Pluggy", () => {
