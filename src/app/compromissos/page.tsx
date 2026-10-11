@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useFinance } from "@/components/finance-provider";
+import { SubscriptionSuggestions } from "@/components/subscription-suggestions";
 import { Button, Card, Empty, Field, Money, MoneyInput, PageHeader, Sheet, inputClass, uid } from "@/components/ui";
 import { formatDate, monthLabel, today } from "@/lib/dates";
 import { installmentStatus } from "@/lib/finance";
@@ -34,6 +35,7 @@ export default function Compromissos() {
     <>
       <PageHeader title="Compromissos" />
       {noAccounts && <Card className="mb-4"><Empty>Cadastre uma conta antes de adicionar compromissos.</Empty></Card>}
+      <SubscriptionSuggestions />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card
           title="Fixos do mês"
